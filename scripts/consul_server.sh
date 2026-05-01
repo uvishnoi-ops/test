@@ -9,6 +9,8 @@ set -euo pipefail
 : "${NODE_TS_HOSTNAME:?}"
 : "${SERVER_LAN_IPS:?}"
 
+NODE_TS_IP=$(cat /etc/vcn-lab/tailscale_ip)
+
 export DEBIAN_FRONTEND=noninteractive
 
 if ! command -v consul >/dev/null 2>&1; then
@@ -26,7 +28,7 @@ install -d -o consul -g consul -m 0750 /etc/consul.d
 sed \
   -e "s|__NODE_NAME__|${NODE_NAME}|g" \
   -e "s|__NODE_LAN_IP__|${NODE_LAN_IP}|g" \
-  -e "s|__NODE_TS_HOSTNAME__|${NODE_TS_HOSTNAME}|g" \
+  -e "s|__NODE_TS_IP__|${NODE_TS_IP}|g" \
   -e "s|__SERVER_LAN_IPS_LIST__|${SERVER_LAN_IPS_LIST}|g" \
   /vagrant/config/consul-server.hcl.tpl > /etc/consul.d/consul.hcl
 chown consul:consul /etc/consul.d/consul.hcl
