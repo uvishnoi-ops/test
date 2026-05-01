@@ -15,7 +15,7 @@ client_addr    = "0.0.0.0"
 
 # Tailnet hostname is added as a second advertise so the worker can
 # reach this server's API + DNS over Tailscale.
-advertise_addr_wan = "__NODE_TS_HOSTNAME__"
+advertise_addr_wan = "__NODE_TS_IP__"
 
 retry_join = [__SERVER_LAN_IPS_LIST__]
 
