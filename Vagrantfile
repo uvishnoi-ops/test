@@ -59,14 +59,17 @@ RAFT_LEADER_IP    = SERVERS.first[:ip]
 Vagrant.configure("2") do |config|
   config.vm.box = BOX
 
-  # rsync project into each VM at /vagrant. Excludes the runtime keys dir so
-  # generated unseal material is not synced from the host into the guest;
-  # instead, the leader writes into /vagrant/.vault-keys which the rsync
-  # back-channel surfaces to the host on each `vagrant rsync-back`.
+  # NFS shared folder so all VMs see the same /vagrant in real time.
+  # This is required for the key-sharing flow: server1 writes
+  # .vault-keys/init.json and .vault-keys/nomad-token during provisioning,
+  # and server2/server3 poll for those files before they can unseal and
+  # start Nomad. With rsync (one-way host->guest copy) those writes never
+  # reach the other VMs. NFS is a true shared mount backed by the host.
+  # Host prerequisite: sudo apt-get install nfs-kernel-server
   config.vm.synced_folder ".", "/vagrant",
-    type: "rsync",
-    rsync__exclude: [".git/", ".vagrant/"],
-    rsync__args: ["--verbose", "--archive", "--delete", "-z"]
+    type: "nfs",
+    nfs_udp: false,
+    nfs_version: 4
 
   config.vm.provider :libvirt do |lv|
     lv.cpus   = CPUS
