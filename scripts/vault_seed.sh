@@ -17,6 +17,9 @@
 #                                          servers/clients use)
 set -euo pipefail
 
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+
 export VAULT_ADDR=http://127.0.0.1:8200
 KEY_DIR=/vagrant/.vault-keys
 INIT_FILE="${KEY_DIR}/init.json"
@@ -117,3 +120,5 @@ echo "$NOMAD_TOKEN" > "$NOMAD_TOKEN_FILE"
 chmod 0600 "$NOMAD_TOKEN_FILE"
 
 echo "[vault-seed] done. nomad token written to $NOMAD_TOKEN_FILE"
+
+mark_done "$NODE_NAME" vault

@@ -7,6 +7,12 @@ set -euo pipefail
 : "${NODE_NAME:?}"
 : "${NODE_TS_HOSTNAME:?}"
 : "${SERVER_TS_HOSTS:?}"
+: "${VAULT_BARRIER_NODES:?}"
+
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+IFS=',' read -ra _vbn <<< "$VAULT_BARRIER_NODES"
+wait_done vault "${_vbn[@]}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -53,3 +59,5 @@ done
 
 curl -fsS http://127.0.0.1:8500/v1/status/peers || true
 echo "[consul-client] done"
+
+mark_done "$NODE_NAME" consul

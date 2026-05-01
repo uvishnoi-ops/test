@@ -8,6 +8,12 @@ set -euo pipefail
 : "${NODE_LAN_IP:?}"
 : "${NODE_TS_HOSTNAME:?}"
 : "${SERVER_LAN_IPS:?}"
+: "${VAULT_BARRIER_NODES:?}"
+
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+IFS=',' read -ra _vbn <<< "$VAULT_BARRIER_NODES"
+wait_done vault "${_vbn[@]}"
 
 NODE_TS_IP=$(cat /etc/vcn-lab/tailscale_ip)
 
@@ -54,3 +60,5 @@ done
 # the test runner on worker1 verifies leader election later.
 curl -fsS http://127.0.0.1:8500/v1/status/leader || true
 echo "[consul-server] done"
+
+mark_done "$NODE_NAME" consul

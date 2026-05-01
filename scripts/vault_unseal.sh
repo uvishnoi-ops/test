@@ -5,6 +5,9 @@
 # so once unsealed the node will sync raft state from the leader.
 set -euo pipefail
 
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+
 export VAULT_ADDR=http://127.0.0.1:8200
 INIT_FILE=/vagrant/.vault-keys/init.json
 
@@ -50,3 +53,5 @@ done
 
 vault status || true
 echo "[vault-unseal] done"
+
+mark_done "$NODE_NAME" vault
