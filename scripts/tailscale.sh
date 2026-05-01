@@ -6,6 +6,10 @@ set -euo pipefail
 
 : "${TS_AUTHKEY:?TS_AUTHKEY must be set (passed in from Vagrantfile)}"
 : "${TS_HOSTNAME:?TS_HOSTNAME must be set (passed in from Vagrantfile)}"
+: "${NODE_NAME:?NODE_NAME must be set (passed in from Vagrantfile)}"
+
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
 
 if ! command -v tailscale >/dev/null 2>&1; then
   echo "[tailscale] installing"
@@ -54,3 +58,5 @@ echo "[tailscale] up: hostname=$TS_HOSTNAME ip=$TS_IP"
 mkdir -p /etc/vcn-lab
 echo "$TS_IP" > /etc/vcn-lab/tailscale_ip
 echo "$TS_HOSTNAME" > /etc/vcn-lab/tailscale_hostname
+
+mark_done "$NODE_NAME" tailscale

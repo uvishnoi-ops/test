@@ -9,6 +9,10 @@ set -euo pipefail
 : "${NODE_LAN_IP:?}"
 : "${RAFT_LEADER_IP:?}"
 
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+wait_done tailscale "$NODE_NAME"
+
 export DEBIAN_FRONTEND=noninteractive
 
 if ! command -v vault >/dev/null 2>&1; then

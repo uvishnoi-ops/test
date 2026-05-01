@@ -54,6 +54,7 @@ WORKERS = [
 
 SERVER_LAN_IPS    = SERVERS.map { |s| s[:ip] }.join(",")
 SERVER_TS_HOSTS   = SERVERS.map { |s| s[:ts_hostname] }.join(",")
+SERVER_NAMES      = SERVERS.map { |s| s[:name] }.join(",")
 RAFT_LEADER_IP    = SERVERS.first[:ip]
 
 Vagrant.configure("2") do |config|
@@ -82,6 +83,11 @@ Vagrant.configure("2") do |config|
     is_leader = (idx == 0)
     is_last   = (idx == SERVERS.length - 1)
 
+    # Phase barriers: each server only waits for nodes provisioned before it
+    # (sequential bring-up means later nodes don't exist yet).
+    vault_barrier  = SERVERS[0..idx].map { |s| s[:name] }.join(",")
+    consul_barrier = SERVERS[0..idx].map { |s| s[:name] }.join(",")
+
     config.vm.define srv[:name] do |node|
       node.vm.hostname = srv[:name]
 
@@ -107,8 +113,9 @@ Vagrant.configure("2") do |config|
 
       node.vm.provision "tailscale", type: "shell",
         path: "scripts/tailscale.sh",
-        env: { "TS_AUTHKEY" => TS_AUTHKEY,
-               "TS_HOSTNAME" => srv[:ts_hostname] }
+        env: { "TS_AUTHKEY"  => TS_AUTHKEY,
+               "TS_HOSTNAME" => srv[:ts_hostname],
+               "NODE_NAME"   => srv[:name] }
 
       node.vm.provision "vault-install", type: "shell",
         path: "scripts/vault_install.sh",
@@ -132,15 +139,19 @@ Vagrant.configure("2") do |config|
 
       node.vm.provision "consul-server", type: "shell",
         path: "scripts/consul_server.sh",
-        env: common_env
+        env: common_env.merge("VAULT_BARRIER_NODES" => vault_barrier)
 
       node.vm.provision "nomad-server", type: "shell",
         path: "scripts/nomad_server.sh",
-        env: common_env
+        env: common_env.merge("CONSUL_BARRIER_NODES" => consul_barrier)
     end
   end
 
   WORKERS.each do |w|
+    # Worker comes after all servers, so it can wait for all of them.
+    vault_barrier  = SERVER_NAMES
+    consul_barrier = "#{SERVER_NAMES},#{w[:name]}"
+
     config.vm.define w[:name] do |node|
       node.vm.hostname = w[:name]
 
@@ -163,16 +174,17 @@ Vagrant.configure("2") do |config|
 
       node.vm.provision "tailscale", type: "shell",
         path: "scripts/tailscale.sh",
-        env: { "TS_AUTHKEY" => TS_AUTHKEY,
-               "TS_HOSTNAME" => w[:ts_hostname] }
+        env: { "TS_AUTHKEY"  => TS_AUTHKEY,
+               "TS_HOSTNAME" => w[:ts_hostname],
+               "NODE_NAME"   => w[:name] }
 
       node.vm.provision "consul-client", type: "shell",
         path: "scripts/consul_client.sh",
-        env: common_env
+        env: common_env.merge("VAULT_BARRIER_NODES" => vault_barrier)
 
       node.vm.provision "nomad-client", type: "shell",
         path: "scripts/nomad_client.sh",
-        env: common_env
+        env: common_env.merge("CONSUL_BARRIER_NODES" => consul_barrier)
 
       node.vm.provision "run-tests", type: "shell",
         path: "scripts/run_tests.sh",

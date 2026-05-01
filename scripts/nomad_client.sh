@@ -6,6 +6,12 @@ set -euo pipefail
 
 : "${NODE_NAME:?}"
 : "${SERVER_TS_HOSTS:?}"
+: "${CONSUL_BARRIER_NODES:?}"
+
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+IFS=',' read -ra _cbn <<< "$CONSUL_BARRIER_NODES"
+wait_done consul "${_cbn[@]}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -65,3 +71,5 @@ for _ in $(seq 1 90); do
 done
 
 echo "[nomad-client] done"
+
+mark_done "$NODE_NAME" nomad

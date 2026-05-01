@@ -8,6 +8,12 @@ set -euo pipefail
 : "${NODE_NAME:?}"
 : "${NODE_LAN_IP:?}"
 : "${SERVER_LAN_IPS:?}"
+: "${CONSUL_BARRIER_NODES:?}"
+
+# shellcheck source=phase_barrier.sh
+source /vagrant/scripts/phase_barrier.sh
+IFS=',' read -ra _cbn <<< "$CONSUL_BARRIER_NODES"
+wait_done consul "${_cbn[@]}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -69,3 +75,5 @@ done
 # the third. run_tests.sh on the worker confirms the cluster is healthy.
 curl -fsS http://127.0.0.1:4646/v1/status/leader || true
 echo "[nomad-server] done"
+
+mark_done "$NODE_NAME" nomad
