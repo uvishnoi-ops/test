@@ -6,10 +6,12 @@ node_name  = "__NODE_NAME__"
 server           = true
 bootstrap_expect = 3
 
-# Gossip + RPC bind on the control-plane LAN. HTTP API on all interfaces
-# (so the local nomad-server can reach 127.0.0.1:8500 and operators can
-# hit the UI over the tailnet).
-bind_addr      = "__NODE_LAN_IP__"
+# Bind all ports on all interfaces so the worker can reach 8301 (serf LAN
+# gossip) via the Tailscale interface. advertise_addr keeps server-to-server
+# gossip on the control-plane LAN; client_addr exposes the HTTP API
+# everywhere so the local nomad-server and operators on the tailnet can
+# reach it.
+bind_addr      = "0.0.0.0"
 advertise_addr = "__NODE_LAN_IP__"
 client_addr    = "0.0.0.0"
 
