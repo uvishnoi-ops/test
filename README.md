@@ -51,6 +51,7 @@ reach the servers is via the Tailscale interface.
 - Linux host with KVM/QEMU + libvirt (`virsh list` works)
 - Vagrant ≥ 2.3
 - `vagrant plugin install vagrant-libvirt`
+- NFS server on the host: `sudo apt-get install nfs-kernel-server`
 - A Tailscale tailnet and a reusable, ephemeral auth key
 - ~16 GiB free RAM and ~80 GB free disk
 
