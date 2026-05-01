@@ -42,10 +42,11 @@ for key in "${KEYS[@]}"; do
 done
 
 # After unseal, raft sync should kick in. Confirm we are part of the cluster.
+# Use `if` rather than a command substitution so vault's non-zero exit code
+# (2 = sealed) does not trigger set -e through the pipeline.
 echo "[vault-unseal] waiting for raft join"
 for _ in $(seq 1 60); do
-  STATE=$(vault status -format=json 2>/dev/null | jq -r '.ha_enabled // false')
-  if [ "$STATE" = "true" ]; then
+  if vault status -format=json 2>/dev/null | jq -e '.ha_enabled == true' >/dev/null 2>&1; then
     break
   fi
   sleep 1
