@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Runs on follower nodes (server2, server3).
 # Sequence:
-#   1. Wait for local Vault API to answer
-#   2. Explicitly join the Raft cluster (vault operator raft join)
-#   3. Wait for the node to become initialized (cluster state synced from leader)
-#   4. Unseal using keys from the shared init file
+#   1. Phase barrier: wait for all preceding servers to finish vault
+#   2. Wait for local Vault API listener
+#   3. vault operator raft join (explicit; idempotent if retry_join already ran)
+#   4. Wait for initialized == true  (cluster state synced from leader)
+#   5. Unseal with keys from shared init file
+#   6. Wait for sealed == false to confirm success
 set -euo pipefail
 
 : "${NODE_NAME:?}"
@@ -14,17 +16,26 @@ set -euo pipefail
 # shellcheck source=phase_barrier.sh
 source /vagrant/scripts/phase_barrier.sh
 
-# Wait for every preceding server to complete its full vault phase before
-# attempting raft-join + unseal on this node. On server2 this means
-# waiting for server1-vault (written at the end of vault_seed.sh). On
-# server3 it means waiting for server1-vault AND server2-vault.
+# Phase barrier: wait for every preceding server's full vault phase.
+# server2 waits for server1-vault; server3 waits for server1-vault + server2-vault.
 IFS=',' read -ra _barrier <<< "$VAULT_UNSEAL_BARRIER_NODES"
 wait_done vault "${_barrier[@]}"
 
 export VAULT_ADDR=http://127.0.0.1:8200
 INIT_FILE=/vagrant/.vault-keys/init.json
 
-# 1. Wait for the shared init file (leader must complete vault-init first).
+# ---------------------------------------------------------------------------
+# Helper: fetch vault seal-status via curl.
+# /v1/sys/seal-status always returns HTTP 200 regardless of initialized/sealed
+# state, so curl exits 0 every time. This avoids the set -euo pipefail trap
+# where `vault status` exits 2 (sealed) propagating through a pipeline even
+# when jq successfully finds the field we want.
+# ---------------------------------------------------------------------------
+vault_seal_status() {
+  curl -fsS http://127.0.0.1:8200/v1/sys/seal-status 2>/dev/null
+}
+
+# 1. Wait for the shared init file (leader must finish vault-init first).
 echo "[vault-unseal] waiting for $INIT_FILE"
 for _ in $(seq 1 120); do
   [ -s "$INIT_FILE" ] && break
@@ -35,7 +46,7 @@ if [ ! -s "$INIT_FILE" ]; then
   exit 1
 fi
 
-# 2. Wait for the local Vault listener to be up.
+# 2. Wait for the local Vault listener.
 echo "[vault-unseal] waiting for local vault listener"
 for _ in $(seq 1 60); do
   if curl -fsS "http://127.0.0.1:8200/v1/sys/health?uninitcode=200&sealedcode=200&standbycode=200" >/dev/null 2>&1; then
@@ -44,35 +55,35 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
-# 3. Join the Raft cluster if this node is not yet initialized.
-#    retry_join in vault.hcl may have already done this; vault operator raft
-#    join is idempotent — it returns an error if already joined which we
-#    suppress so the script can confirm initialization in the next step.
-if ! vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null 2>&1; then
+# 3. Explicitly join the Raft cluster.
+#    retry_join in vault.hcl may have already done this automatically;
+#    vault operator raft join is idempotent (|| true handles already-joined).
+if ! vault_seal_status | jq -e '.initialized == true' >/dev/null 2>&1; then
   echo "[vault-unseal] joining raft cluster at leader ${RAFT_LEADER_IP}"
   vault operator raft join "http://${RAFT_LEADER_IP}:8200" || true
 fi
 
-# Wait for initialized state (cluster state has been synced from the leader).
+# 4. Wait for initialized == true (leader has synced cluster state to this node).
 echo "[vault-unseal] waiting for initialized state"
 for _ in $(seq 1 60); do
-  if vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null 2>&1; then
+  if vault_seal_status | jq -e '.initialized == true' >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
-if ! vault status -format=json 2>/dev/null | jq -e '.initialized == true' >/dev/null 2>&1; then
-  echo "[vault-unseal] FATAL: node did not reach initialized state" >&2
+if ! vault_seal_status | jq -e '.initialized == true' >/dev/null 2>&1; then
+  echo "[vault-unseal] FATAL: node did not reach initialized state after raft join" >&2
   exit 1
 fi
+echo "[vault-unseal] node is initialized"
 
-# 4. Unseal.
-if vault status -format=json 2>/dev/null | jq -e '.sealed == false' >/dev/null 2>&1; then
+# 5. Unseal.
+if vault_seal_status | jq -e '.sealed == false' >/dev/null 2>&1; then
   echo "[vault-unseal] already unsealed"
 else
   mapfile -t KEYS < <(jq -r '.unseal_keys_b64[]' "$INIT_FILE")
   for key in "${KEYS[@]}"; do
-    if vault status -format=json 2>/dev/null | jq -e '.sealed == false' >/dev/null 2>&1; then
+    if vault_seal_status | jq -e '.sealed == false' >/dev/null 2>&1; then
       break
     fi
     echo "[vault-unseal] applying unseal key"
@@ -80,16 +91,20 @@ else
   done
 fi
 
-# Confirm the node is unsealed and has joined the raft cluster.
-echo "[vault-unseal] waiting for raft ha_enabled"
+# 6. Confirm unsealed.
+echo "[vault-unseal] waiting for sealed == false"
 for _ in $(seq 1 60); do
-  if vault status -format=json 2>/dev/null | jq -e '.ha_enabled == true' >/dev/null 2>&1; then
+  if vault_seal_status | jq -e '.sealed == false' >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
+if ! vault_seal_status | jq -e '.sealed == false' >/dev/null 2>&1; then
+  echo "[vault-unseal] FATAL: node is still sealed after applying unseal keys" >&2
+  exit 1
+fi
 
-vault status || true
+vault_seal_status | jq .
 echo "[vault-unseal] done"
 
 mark_done "$NODE_NAME" vault
