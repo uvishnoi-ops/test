@@ -132,9 +132,13 @@ Vagrant.configure("2") do |config|
           path: "scripts/vault_seed.sh",
           env: common_env
       else
+        # Followers must wait for every server provisioned before them to
+        # finish their full vault phase (init+seed on server1, unseal on
+        # any intermediate follower) before attempting raft-join + unseal.
+        prior_vault_nodes = SERVERS[0...idx].map { |s| s[:name] }.join(",")
         node.vm.provision "vault-unseal", type: "shell",
           path: "scripts/vault_unseal.sh",
-          env: common_env
+          env: common_env.merge("VAULT_UNSEAL_BARRIER_NODES" => prior_vault_nodes)
       end
 
       node.vm.provision "consul-server", type: "shell",
