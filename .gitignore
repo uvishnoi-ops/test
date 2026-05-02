@@ -1,5 +1,6 @@
 .vagrant/
 .vault-keys/
+.done/
 *.log
 *.swp
 .DS_Store

@@ -72,6 +72,17 @@ Vagrant.configure("2") do |config|
     nfs_udp: false,
     nfs_version: 4
 
+  # Remove the phase-barrier marker directory from the host after any machine
+  # is destroyed. .done/ lives on the host (it is inside the NFS-shared
+  # /vagrant), so stale markers from a previous run would cause wait_done
+  # calls on the next `vagrant up` to return immediately and skip the
+  # intended ordering. Triggering on each destroy is safe because rm -rf
+  # is idempotent.
+  config.trigger.after :destroy do |t|
+    t.name = "clean up .done barrier dir"
+    t.run  = { inline: "rm -rf .done" }
+  end
+
   config.vm.provider :libvirt do |lv|
     lv.cpus   = CPUS
     lv.memory = MEMORY
