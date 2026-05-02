@@ -9,9 +9,17 @@ set -euo pipefail
 
 : "${NODE_NAME:?}"
 : "${RAFT_LEADER_IP:?}"
+: "${VAULT_UNSEAL_BARRIER_NODES:?}"
 
 # shellcheck source=phase_barrier.sh
 source /vagrant/scripts/phase_barrier.sh
+
+# Wait for every preceding server to complete its full vault phase before
+# attempting raft-join + unseal on this node. On server2 this means
+# waiting for server1-vault (written at the end of vault_seed.sh). On
+# server3 it means waiting for server1-vault AND server2-vault.
+IFS=',' read -ra _barrier <<< "$VAULT_UNSEAL_BARRIER_NODES"
+wait_done vault "${_barrier[@]}"
 
 export VAULT_ADDR=http://127.0.0.1:8200
 INIT_FILE=/vagrant/.vault-keys/init.json
