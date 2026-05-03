@@ -7,12 +7,31 @@ set -euo pipefail
 
 : "${NODE_NAME:?}"
 : "${RAFT_LEADER_TS_HOSTNAME:?}"
+: "${RAFT_LEADER_NAME:?}"
 
 # shellcheck source=phase_barrier.sh
 source /vagrant/scripts/phase_barrier.sh
 wait_done tailscale "$NODE_NAME"
 
 NODE_TS_IP=$(cat /etc/vcn-lab/tailscale_ip)
+
+# Read the leader's Tailscale IP from the NFS-shared file written by
+# tailscale.sh on the leader node. Using the IP (not the MagicDNS
+# hostname) ensures leader_api_addr matches the leader's api_addr
+# exactly — Vault performs a string comparison in its raft challenge
+# handler, so hostname != ip would cause a 500 "failed to get raft
+# challenge" error even when the hostname resolves to the right address.
+LEADER_IP_FILE="/vagrant/.ts-ips/${RAFT_LEADER_NAME}"
+echo "[vault-install] waiting for leader Tailscale IP ($LEADER_IP_FILE)"
+for _ in $(seq 1 60); do
+  [ -s "$LEADER_IP_FILE" ] && break
+  sleep 2
+done
+if [ ! -s "$LEADER_IP_FILE" ]; then
+  echo "[vault-install] FATAL: ${LEADER_IP_FILE} not found after waiting" >&2
+  exit 1
+fi
+RAFT_LEADER_TS_IP=$(cat "$LEADER_IP_FILE")
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -29,7 +48,7 @@ install -d -o vault -g vault -m 0750 /etc/vault.d
 sed \
   -e "s|__NODE_NAME__|${NODE_NAME}|g" \
   -e "s|__NODE_TS_IP__|${NODE_TS_IP}|g" \
-  -e "s|__RAFT_LEADER_TS_HOSTNAME__|${RAFT_LEADER_TS_HOSTNAME}|g" \
+  -e "s|__RAFT_LEADER_TS_IP__|${RAFT_LEADER_TS_IP}|g" \
   /vagrant/config/vault.hcl.tpl > /etc/vault.d/vault.hcl
 chown vault:vault /etc/vault.d/vault.hcl
 chmod 0640 /etc/vault.d/vault.hcl

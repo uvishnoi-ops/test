@@ -11,6 +11,7 @@ set -euo pipefail
 
 : "${NODE_NAME:?}"
 : "${RAFT_LEADER_TS_HOSTNAME:?}"
+: "${RAFT_LEADER_NAME:?}"
 : "${VAULT_UNSEAL_BARRIER_NODES:?}"
 
 # shellcheck source=phase_barrier.sh
@@ -23,6 +24,12 @@ wait_done vault "${_barrier[@]}"
 
 export VAULT_ADDR=http://127.0.0.1:8200
 INIT_FILE=/vagrant/.vault-keys/init.json
+
+# Read the leader's Tailscale IP from the NFS-shared file (written by
+# tailscale.sh). Using the IP avoids the string-comparison mismatch in
+# Vault's raft challenge handler (api_addr is an IP; passing a hostname
+# causes "failed to get raft challenge" 500 even if DNS resolves correctly).
+RAFT_LEADER_TS_IP=$(cat "/vagrant/.ts-ips/${RAFT_LEADER_NAME}")
 
 # ---------------------------------------------------------------------------
 # Helper: fetch vault seal-status via curl.
@@ -59,8 +66,8 @@ done
 #    retry_join in vault.hcl may have already done this automatically;
 #    vault operator raft join is idempotent (|| true handles already-joined).
 if ! vault_seal_status | jq -e '.initialized == true' >/dev/null 2>&1; then
-  echo "[vault-unseal] joining raft cluster at leader ${RAFT_LEADER_TS_HOSTNAME}"
-  vault operator raft join "http://${RAFT_LEADER_TS_HOSTNAME}:8200" || true
+  echo "[vault-unseal] joining raft cluster at ${RAFT_LEADER_TS_HOSTNAME} (${RAFT_LEADER_TS_IP})"
+  vault operator raft join "http://${RAFT_LEADER_TS_IP}:8200" || true
 fi
 
 # 4. Wait for initialized == true (leader has synced cluster state to this node).
