@@ -37,9 +37,12 @@ vault {
   enabled = true
   # Tasks rendering templates need to talk to a real Vault. Hit the
   # leader (or any active node) over the tailnet.
-  address          = "http://__VAULT_TS_HOST__:8200"
-  create_from_role = "nomad-cluster"
-  token            = "__NOMAD_VAULT_TOKEN__"
+  address               = "http://__VAULT_TS_HOST__:8200"
+  create_from_role      = "nomad-cluster"
+  token                 = "__NOMAD_VAULT_TOKEN__"
+  # Workload Identity: clients exchange the task JWT for a Vault token
+  # via the jwt auth backend path configured by vault_nomad_wi.sh.
+  jwt_auth_backend_path = "jwt"
 }
 
 plugin "raw_exec" {

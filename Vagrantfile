@@ -202,6 +202,19 @@ Vagrant.configure("2") do |config|
         path: "scripts/nomad_client.sh",
         env: common_env.merge("CONSUL_BARRIER_NODES" => consul_barrier)
 
+      # Configure Vault JWT auth for Nomad Workload Identity.
+      # Must run after all three Nomad servers are up (bootstrap_expect=3
+      # means no Nomad leader until all three join). worker1 is provisioned
+      # last, so by the time this runs server1-nomad/server2-nomad/server3-nomad
+      # barriers are already marked.
+      node.vm.provision "vault-nomad-wi", type: "shell",
+        path: "scripts/vault_nomad_wi.sh",
+        env: common_env.merge(
+          "NOMAD_BARRIER_NODES" => SERVER_NAMES,
+          "VAULT_TS_HOST"       => SERVERS.first[:ts_hostname],
+          "NOMAD_TS_HOST"       => SERVERS.first[:ts_hostname]
+        )
+
       node.vm.provision "run-tests", type: "shell",
         path: "scripts/run_tests.sh",
         env: common_env
