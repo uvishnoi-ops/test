@@ -144,25 +144,50 @@ if [ "${NOMAD_PEERS:-0}" -ge 3 ] && [ "$READY" = "ready" ]; then
     fail "hello allocation is running" "ClientStatus=${ALLOC_STATUS:-<none>}"
   fi
 
-  # 6. Vault template rendered into the task. The check passes if the
-  # http endpoint returns text containing MESSAGE=.
+  # 6. nginx is serving; Vault secret rendered into task.
+  #    Checks:
+  #      a) /health returns JSON {"status":"ok",...}   (nginx is up)
+  #      b) /status.json contains the vault secret     (template rendered)
   ALLOC_ID=$(curl -fsS --max-time 5 "${NOMAD_ADDR}/v1/job/hello/allocations" 2>/dev/null \
-    | jq -r '.[0].ID // empty')
+    | jq -r '[.[] | select(.ClientStatus=="running")] | .[0].ID // empty')
   if [ -n "$ALLOC_ID" ]; then
     HTTP_PORT=$(curl -fsS --max-time 5 "${NOMAD_ADDR}/v1/allocation/${ALLOC_ID}" 2>/dev/null \
       | jq -r '.AllocatedResources.Shared.Networks[0].DynamicPorts[] | select(.Label=="http") | .Value' 2>/dev/null || echo "")
+
+    echo "  alloc: ${ALLOC_ID}  port: ${HTTP_PORT:-<unknown>}"
+
     if [ -n "$HTTP_PORT" ]; then
-      # Hit the task locally on the worker — it's the only thing on this
-      # libvirt network anyway.
-      RESPONSE=$(curl -fsS --max-time 5 "http://127.0.0.1:${HTTP_PORT}/" 2>/dev/null || true)
-      if echo "$RESPONSE" | grep -q "^MESSAGE="; then
-        pass "vault template rendered into task ($(echo "$RESPONSE" | head -1))"
+      # Wait for nginx to accept connections (templates render before exec,
+      # but give the process a moment to bind the port).
+      for _ in $(seq 1 15); do
+        curl -fsS --max-time 2 "http://127.0.0.1:${HTTP_PORT}/health" >/dev/null 2>&1 && break
+        sleep 2
+      done
+
+      # a) Health endpoint — verifies nginx is running and responding.
+      HEALTH_BODY=$(curl -fsS --max-time 5 \
+        "http://127.0.0.1:${HTTP_PORT}/health" 2>/dev/null || true)
+      if echo "$HEALTH_BODY" | jq -e '.status == "ok"' >/dev/null 2>&1; then
+        pass "nginx /health responds ok (port ${HTTP_PORT})"
       else
-        fail "vault template rendered into task" "response: ${RESPONSE:0:80}"
+        fail "nginx /health" "port=${HTTP_PORT} body=${HEALTH_BODY:0:80}"
+      fi
+
+      # b) status.json — verifies the Vault secret was rendered into the task.
+      STATUS_JSON=$(curl -fsS --max-time 5 \
+        "http://127.0.0.1:${HTTP_PORT}/status.json" 2>/dev/null || true)
+      if echo "$STATUS_JSON" | jq -e '.vault_secret.message' >/dev/null 2>&1; then
+        MSG=$(echo "$STATUS_JSON" | jq -r '.vault_secret.message')
+        pass "vault secret rendered into task (\"${MSG}\")"
+      else
+        fail "vault secret rendered into task" \
+          "status.json: ${STATUS_JSON:0:120}"
       fi
     else
-      fail "vault template rendered into task" "no http port found"
+      fail "nginx port lookup" "could not get http port from alloc ${ALLOC_ID}"
     fi
+  else
+    fail "nginx / vault template" "no running allocation found"
   fi
 
   # 7. Consul service registered + check passing.
