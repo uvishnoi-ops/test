@@ -6,14 +6,15 @@
 set -euo pipefail
 
 : "${NODE_NAME:?}"
-: "${NODE_LAN_IP:?}"
-: "${SERVER_LAN_IPS:?}"
+: "${SERVER_TS_HOSTS:?}"
 : "${CONSUL_BARRIER_NODES:?}"
 
 # shellcheck source=phase_barrier.sh
 source /vagrant/scripts/phase_barrier.sh
 IFS=',' read -ra _cbn <<< "$CONSUL_BARRIER_NODES"
 wait_done consul "${_cbn[@]}"
+
+NODE_TS_IP=$(cat /etc/vcn-lab/tailscale_ip)
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -39,7 +40,7 @@ if [ ! -s "$NOMAD_TOKEN_FILE" ]; then
 fi
 NOMAD_VAULT_TOKEN=$(cat "$NOMAD_TOKEN_FILE")
 
-SERVER_LAN_IPS_LIST=$(echo "$SERVER_LAN_IPS" \
+SERVER_TS_HOSTS_LIST=$(echo "$SERVER_TS_HOSTS" \
   | awk -F',' '{for(i=1;i<=NF;i++) printf "%s\"%s\"", (i>1 ? ", " : ""), $i}')
 
 install -d -o nomad -g nomad -m 0750 /opt/nomad/data
@@ -49,8 +50,8 @@ install -d -o nomad -g nomad -m 0750 /etc/nomad.d
 umask 077
 sed \
   -e "s|__NODE_NAME__|${NODE_NAME}|g" \
-  -e "s|__NODE_LAN_IP__|${NODE_LAN_IP}|g" \
-  -e "s|__SERVER_LAN_IPS_LIST__|${SERVER_LAN_IPS_LIST}|g" \
+  -e "s|__NODE_TS_IP__|${NODE_TS_IP}|g" \
+  -e "s|__SERVER_TS_HOSTS_LIST__|${SERVER_TS_HOSTS_LIST}|g" \
   -e "s|__NOMAD_VAULT_TOKEN__|${NOMAD_VAULT_TOKEN}|g" \
   /vagrant/config/nomad-server.hcl.tpl > /etc/nomad.d/nomad.hcl
 chown nomad:nomad /etc/nomad.d/nomad.hcl
