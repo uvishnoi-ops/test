@@ -11,11 +11,13 @@ job "hello" {
       }
     }
 
-    # Tasks request a Vault token at runtime. The nomad-cluster role on
-    # Vault is configured to issue tokens with the "nomad-job" policy,
-    # which has read access to kv/test/*.
+    # Workload Identity: Nomad signs a JWT for this task (vault_default
+    # identity defined on the server). The Nomad client exchanges the JWT
+    # at Vault's jwt/ auth backend. The nomad-workloads role (configured by
+    # vault_nomad_wi.sh) maps that JWT to the nomad-job policy, which has
+    # read access to kv/test/*. No `policies` field needed here — the Vault
+    # JWT role controls policy assignment.
     vault {
-      policies    = ["nomad-job"]
       change_mode = "noop"
     }
 

@@ -37,10 +37,18 @@ consul {
 }
 
 vault {
-  enabled          = true
-  address          = "http://127.0.0.1:8200"
-  create_from_role = "nomad-cluster"
-  token            = "__NOMAD_VAULT_TOKEN__"
+  enabled               = true
+  address               = "http://127.0.0.1:8200"
+  create_from_role      = "nomad-cluster"
+  token                 = "__NOMAD_VAULT_TOKEN__"
+  # Workload Identity: Nomad signs per-task JWTs; clients exchange them
+  # for Vault tokens via the jwt auth backend (configured by vault_nomad_wi.sh).
+  jwt_auth_backend_path = "jwt"
+
+  default_identity {
+    aud = ["vault.io"]
+    ttl = "1h"
+  }
 }
 
 # Disable Nomad ACLs in this lab. Tailnet ACLs are the access boundary.
