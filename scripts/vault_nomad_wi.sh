@@ -109,22 +109,24 @@ vault_req POST auth/jwt/config "$CONFIG_BODY" >/dev/null
 #    Nomad 1.7 passes create_from_role as the role when calling
 #    auth/<jwt_auth_backend_path>/login for Workload Identity.
 #    bound_audiences must match the `aud` in default_identity on the server.
-#    user_claim is the JWT field used to identify the "user" for Vault entities.
+#
+#    user_claim = "sub": the vault_default identity JWT only carries standard
+#    OIDC claims (sub, aud, iat, exp, nbf, jti). Nomad-specific claims such as
+#    nomad_job_id and nomad_namespace are NOT present unless an explicit
+#    `identity` block with custom extra_claims is configured in the job spec.
+#    Using "sub" (format: region:namespace:job:group:task) is safe and unique.
+#
 #    token_period (seconds) keeps tokens alive while Nomad renews them.
 # ---------------------------------------------------------------------------
 echo "[vault-nomad-wi] writing nomad-cluster JWT role"
 ROLE_BODY=$(cat <<'EOF'
 {
-  "role_type":           "jwt",
-  "bound_audiences":     ["vault.io"],
-  "user_claim":          "/nomad_job_id",
-  "claim_mappings": {
-    "/nomad_namespace": "nomad_namespace",
-    "/nomad_job_id":    "nomad_job_id"
-  },
-  "token_type":          "service",
-  "token_policies":      ["nomad-job"],
-  "token_period":        "3600",
+  "role_type":        "jwt",
+  "bound_audiences":  ["vault.io"],
+  "user_claim":       "sub",
+  "token_type":       "service",
+  "token_policies":   ["nomad-job"],
+  "token_period":     "3600",
   "token_explicit_max_ttl": 0
 }
 EOF
