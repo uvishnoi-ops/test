@@ -8,7 +8,10 @@
 #   2. Wait for Nomad leader election
 #   3. Enable JWT auth at vault/auth/jwt/  (idempotent)
 #   4. Point it at Nomad's JWKS endpoint (rotated keys published there)
-#   5. Create the nomad-workloads role bound to the nomad-job policy
+#   5. Create the nomad-cluster JWT role bound to the nomad-job policy
+#
+# The JWT role MUST be named "nomad-cluster" — Nomad 1.7 uses
+# create_from_role as the role name when calling auth/jwt/login.
 #
 # Vault is reached over the tailnet (VAULT_TS_HOST).
 # Nomad JWKS is fetched from NOMAD_TS_HOST (any Nomad server; same keys).
@@ -86,12 +89,13 @@ fi
 
 # ---------------------------------------------------------------------------
 # 3. Configure the JWT backend to trust Nomad's JWKS.
-#    default_role means login calls without an explicit role use nomad-workloads.
+#    default_role matches create_from_role so logins without an explicit
+#    role parameter still land on the right role.
 # ---------------------------------------------------------------------------
 echo "[vault-nomad-wi] configuring JWT backend (JWKS: $NOMAD_JWKS_URL)"
 CONFIG_BODY=$(jq -n \
   --arg jwks_url  "$NOMAD_JWKS_URL" \
-  --arg def_role  "nomad-workloads" \
+  --arg def_role  "nomad-cluster" \
   '{
     jwks_url:             $jwks_url,
     jwt_supported_algs:   ["RS256","EdDSA"],
@@ -100,12 +104,15 @@ CONFIG_BODY=$(jq -n \
 vault_req POST auth/jwt/config "$CONFIG_BODY" >/dev/null
 
 # ---------------------------------------------------------------------------
-# 4. Create the nomad-workloads role.
-#    bound_audiences must match the `aud` in nomad-server.hcl.tpl default_identity.
+# 4. Create the nomad-cluster JWT role.
+#    Name MUST match create_from_role in nomad-server/client.hcl.tpl —
+#    Nomad 1.7 passes create_from_role as the role when calling
+#    auth/<jwt_auth_backend_path>/login for Workload Identity.
+#    bound_audiences must match the `aud` in default_identity on the server.
 #    user_claim is the JWT field used to identify the "user" for Vault entities.
 #    token_period (seconds) keeps tokens alive while Nomad renews them.
 # ---------------------------------------------------------------------------
-echo "[vault-nomad-wi] writing nomad-workloads JWT role"
+echo "[vault-nomad-wi] writing nomad-cluster JWT role"
 ROLE_BODY=$(cat <<'EOF'
 {
   "role_type":           "jwt",
@@ -122,6 +129,6 @@ ROLE_BODY=$(cat <<'EOF'
 }
 EOF
 )
-vault_req POST auth/jwt/role/nomad-workloads "$ROLE_BODY" >/dev/null
+vault_req POST auth/jwt/role/nomad-cluster "$ROLE_BODY" >/dev/null
 
 echo "[vault-nomad-wi] JWT auth configured; tasks using vault_default WI can now authenticate"
