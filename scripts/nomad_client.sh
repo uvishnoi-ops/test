@@ -20,6 +20,15 @@ if ! command -v nomad >/dev/null 2>&1; then
   apt-get install -yq nomad
 fi
 
+# nginx is used by the hello test job (raw_exec, not Docker).
+if ! command -v nginx >/dev/null 2>&1; then
+  echo "[nomad-client] installing nginx"
+  apt-get install -yq nginx
+fi
+# Disable the system-managed nginx service so that Nomad jobs manage
+# the nginx process lifecycle directly (avoids pid-file / port conflicts).
+systemctl disable --now nginx.service 2>/dev/null || true
+
 NOMAD_TOKEN_FILE=/vagrant/.vault-keys/nomad-token
 echo "[nomad-client] waiting for $NOMAD_TOKEN_FILE"
 for _ in $(seq 1 120); do
