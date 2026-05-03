@@ -1,6 +1,7 @@
 .vagrant/
 .vault-keys/
 .done/
+.ts-ips/
 *.log
 *.swp
 .DS_Store

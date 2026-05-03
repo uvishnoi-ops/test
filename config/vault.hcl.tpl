@@ -6,7 +6,10 @@ storage "raft" {
   node_id = "__NODE_NAME__"
 
   retry_join {
-    leader_api_addr = "http://__RAFT_LEADER_TS_HOSTNAME__:8200"
+    # Use the Tailscale IP (not the MagicDNS hostname) so the address
+    # matches the leader's api_addr exactly (Vault uses string comparison
+    # in the raft bootstrap-challenge handler).
+    leader_api_addr = "http://__RAFT_LEADER_TS_IP__:8200"
   }
 }
 

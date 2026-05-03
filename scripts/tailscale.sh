@@ -59,4 +59,11 @@ mkdir -p /etc/vcn-lab
 echo "$TS_IP" > /etc/vcn-lab/tailscale_ip
 echo "$TS_HOSTNAME" > /etc/vcn-lab/tailscale_hostname
 
+# Share this node's Tailscale IP on the NFS mount so other nodes can
+# look up the leader's IP without relying on MagicDNS resolution.
+# Vault's raft challenge handler compares leader_api_addr as a STRING
+# against api_addr; using the IP (not the hostname) avoids a mismatch.
+mkdir -p /vagrant/.ts-ips
+echo "$TS_IP" > "/vagrant/.ts-ips/${NODE_NAME}"
+
 mark_done "$NODE_NAME" tailscale
