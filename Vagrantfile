@@ -110,13 +110,14 @@ Vagrant.configure("2") do |config|
         libvirt__dhcp_enabled: false
 
       common_env = {
-        "NODE_NAME"         => srv[:name],
-        "NODE_LAN_IP"       => srv[:ip],
-        "NODE_TS_HOSTNAME"  => srv[:ts_hostname],
-        "RAFT_LEADER_IP"    => RAFT_LEADER_IP,
-        "SERVER_LAN_IPS"    => SERVER_LAN_IPS,
-        "SERVER_TS_HOSTS"   => SERVER_TS_HOSTS,
-        "IS_RAFT_LEADER"    => is_leader.to_s,
+        "NODE_NAME"               => srv[:name],
+        "NODE_LAN_IP"             => srv[:ip],
+        "NODE_TS_HOSTNAME"        => srv[:ts_hostname],
+        "RAFT_LEADER_IP"          => RAFT_LEADER_IP,
+        "RAFT_LEADER_TS_HOSTNAME" => SERVERS.first[:ts_hostname],
+        "SERVER_LAN_IPS"          => SERVER_LAN_IPS,
+        "SERVER_TS_HOSTS"         => SERVER_TS_HOSTS,
+        "IS_RAFT_LEADER"          => is_leader.to_s,
       }
 
       node.vm.provision "common", type: "shell",

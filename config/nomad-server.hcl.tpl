@@ -5,10 +5,12 @@ name       = "__NODE_NAME__"
 
 bind_addr = "0.0.0.0"
 
+# Advertise on the Tailscale IP so all server-to-server and
+# server-to-client traffic goes via the tailnet.
 advertise {
-  http = "__NODE_LAN_IP__"
-  rpc  = "__NODE_LAN_IP__"
-  serf = "__NODE_LAN_IP__"
+  http = "__NODE_TS_IP__"
+  rpc  = "__NODE_TS_IP__"
+  serf = "__NODE_TS_IP__"
 }
 
 server {
@@ -16,7 +18,7 @@ server {
   bootstrap_expect = 3
 
   server_join {
-    retry_join = [__SERVER_LAN_IPS_LIST__]
+    retry_join = [__SERVER_TS_HOSTS_LIST__]
   }
 }
 

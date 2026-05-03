@@ -10,7 +10,7 @@
 set -euo pipefail
 
 : "${NODE_NAME:?}"
-: "${RAFT_LEADER_IP:?}"
+: "${RAFT_LEADER_TS_HOSTNAME:?}"
 : "${VAULT_UNSEAL_BARRIER_NODES:?}"
 
 # shellcheck source=phase_barrier.sh
@@ -59,8 +59,8 @@ done
 #    retry_join in vault.hcl may have already done this automatically;
 #    vault operator raft join is idempotent (|| true handles already-joined).
 if ! vault_seal_status | jq -e '.initialized == true' >/dev/null 2>&1; then
-  echo "[vault-unseal] joining raft cluster at leader ${RAFT_LEADER_IP}"
-  vault operator raft join "http://${RAFT_LEADER_IP}:8200" || true
+  echo "[vault-unseal] joining raft cluster at leader ${RAFT_LEADER_TS_HOSTNAME}"
+  vault operator raft join "http://${RAFT_LEADER_TS_HOSTNAME}:8200" || true
 fi
 
 # 4. Wait for initialized == true (leader has synced cluster state to this node).

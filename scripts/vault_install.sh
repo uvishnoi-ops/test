@@ -6,12 +6,13 @@
 set -euo pipefail
 
 : "${NODE_NAME:?}"
-: "${NODE_LAN_IP:?}"
-: "${RAFT_LEADER_IP:?}"
+: "${RAFT_LEADER_TS_HOSTNAME:?}"
 
 # shellcheck source=phase_barrier.sh
 source /vagrant/scripts/phase_barrier.sh
 wait_done tailscale "$NODE_NAME"
+
+NODE_TS_IP=$(cat /etc/vcn-lab/tailscale_ip)
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -23,19 +24,20 @@ fi
 install -d -o vault -g vault -m 0750 /opt/vault/data
 install -d -o vault -g vault -m 0750 /etc/vault.d
 
-# Render config from template.
+# Render config from template. All addresses use the Tailscale IP so
+# every inter-node path goes via the tailnet.
 sed \
   -e "s|__NODE_NAME__|${NODE_NAME}|g" \
-  -e "s|__NODE_LAN_IP__|${NODE_LAN_IP}|g" \
-  -e "s|__RAFT_LEADER_IP__|${RAFT_LEADER_IP}|g" \
+  -e "s|__NODE_TS_IP__|${NODE_TS_IP}|g" \
+  -e "s|__RAFT_LEADER_TS_HOSTNAME__|${RAFT_LEADER_TS_HOSTNAME}|g" \
   /vagrant/config/vault.hcl.tpl > /etc/vault.d/vault.hcl
 chown vault:vault /etc/vault.d/vault.hcl
 chmod 0640 /etc/vault.d/vault.hcl
 
 # Drop dev/demo defaults from the package and rely on our config only.
 if [ -f /etc/vault.d/vault.env ]; then
-  cat > /etc/vault.d/vault.env <<EOF
-VAULT_ADDR=http://${NODE_LAN_IP}:8200
+  cat > /etc/vault.d/vault.env <<'EOF'
+VAULT_ADDR=http://127.0.0.1:8200
 EOF
   chown vault:vault /etc/vault.d/vault.env
 fi

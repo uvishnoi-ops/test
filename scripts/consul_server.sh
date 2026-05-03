@@ -5,9 +5,7 @@
 set -euo pipefail
 
 : "${NODE_NAME:?}"
-: "${NODE_LAN_IP:?}"
-: "${NODE_TS_HOSTNAME:?}"
-: "${SERVER_LAN_IPS:?}"
+: "${SERVER_TS_HOSTS:?}"
 : "${VAULT_BARRIER_NODES:?}"
 
 # shellcheck source=phase_barrier.sh
@@ -24,8 +22,8 @@ if ! command -v consul >/dev/null 2>&1; then
   apt-get install -yq consul
 fi
 
-# Convert "192.168.56.11,192.168.56.12,192.168.56.13" to "\"...\", \"...\", \"...\""
-SERVER_LAN_IPS_LIST=$(echo "$SERVER_LAN_IPS" \
+# Convert "vcn-server-1,vcn-server-2,vcn-server-3" to "\"...\", \"...\", \"...\""
+SERVER_TS_HOSTS_LIST=$(echo "$SERVER_TS_HOSTS" \
   | awk -F',' '{for(i=1;i<=NF;i++) printf "%s\"%s\"", (i>1 ? ", " : ""), $i}')
 
 install -d -o consul -g consul -m 0750 /opt/consul
@@ -33,9 +31,8 @@ install -d -o consul -g consul -m 0750 /etc/consul.d
 
 sed \
   -e "s|__NODE_NAME__|${NODE_NAME}|g" \
-  -e "s|__NODE_LAN_IP__|${NODE_LAN_IP}|g" \
   -e "s|__NODE_TS_IP__|${NODE_TS_IP}|g" \
-  -e "s|__SERVER_LAN_IPS_LIST__|${SERVER_LAN_IPS_LIST}|g" \
+  -e "s|__SERVER_TS_HOSTS_LIST__|${SERVER_TS_HOSTS_LIST}|g" \
   /vagrant/config/consul-server.hcl.tpl > /etc/consul.d/consul.hcl
 chown consul:consul /etc/consul.d/consul.hcl
 chmod 0640 /etc/consul.d/consul.hcl
